@@ -8,10 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,10 +25,10 @@ public class BranchController {
 
     @GetMapping("/list")
     public String list(Model model,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "q", required = false) String q,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "lat", required = false) Double lat,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "lng", required = false) Double lng,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "radius", required = false) Double radiusKm) {
+                       @RequestParam(value = "q", required = false) String q,
+                       @RequestParam(value = "lat", required = false) Double lat,
+                       @RequestParam(value = "lng", required = false) Double lng,
+                       @RequestParam(value = "radius", required = false) Double radiusKm) {
         int page = 0;
         int size = 6;
 
@@ -58,12 +55,12 @@ public class BranchController {
     }
 
     @GetMapping("/page")
-    public String page(@org.springframework.web.bind.annotation.RequestParam int page,
-                       @org.springframework.web.bind.annotation.RequestParam(required = false) Integer size,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "q", required = false) String q,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "lat", required = false) Double lat,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "lng", required = false) Double lng,
-                       @org.springframework.web.bind.annotation.RequestParam(value = "radius", required = false) Double radiusKm,
+    public String page(@RequestParam int page,
+                       @RequestParam(required = false) Integer size,
+                       @RequestParam(value = "q", required = false) String q,
+                       @RequestParam(value = "lat", required = false) Double lat,
+                       @RequestParam(value = "lng", required = false) Double lng,
+                       @RequestParam(value = "radius", required = false) Double radiusKm,
                        Model model, HttpServletResponse response) {
         int pageSize = (size == null || size <= 0) ? 6 : size;
         Page<Branch> branchPage;
