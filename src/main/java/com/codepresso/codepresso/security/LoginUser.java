@@ -1,6 +1,6 @@
 package com.codepresso.codepresso.security;
 
-import com.codepresso.codepresso.entity.member.Member;
+import com.codepresso.codepresso.member.entity.Member;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.User;

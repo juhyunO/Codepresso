@@ -1,9 +1,8 @@
 package com.codepresso.codepresso.security;
 
-import com.codepresso.codepresso.repository.member.MemberRepository;
+import com.codepresso.codepresso.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
-import org.springframework.security.authentication.event.AuthenticationSuccessEvent;
 import org.springframework.security.authentication.event.InteractiveAuthenticationSuccessEvent;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;

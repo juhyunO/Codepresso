@@ -1,7 +1,7 @@
 package com.codepresso.codepresso.config.init;
 
-import com.codepresso.codepresso.entity.member.Member;
-import com.codepresso.codepresso.repository.member.MemberRepository;
+import com.codepresso.codepresso.member.entity.Member;
+import com.codepresso.codepresso.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
