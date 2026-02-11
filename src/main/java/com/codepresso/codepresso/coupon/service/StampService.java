@@ -31,12 +31,7 @@ public class StampService {
     /**
      * 주문으로부터 스탬프 적립 ( quantity update )
      * */
-    @Retryable(
-            retryFor = ObjectOptimisticLockingFailureException.class,
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 50, multiplier = 1.5)
-    )
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void earnStampsFromOrder(Long memberId, List<OrdersDetail> ordersDetails) {
         // 1.회원 조회
         Member member = memberRepository.findById(memberId)

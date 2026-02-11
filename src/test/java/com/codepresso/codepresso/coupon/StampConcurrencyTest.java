@@ -2,6 +2,7 @@ package com.codepresso.codepresso.coupon;
 
 import com.codepresso.codepresso.coupon.entity.Stamp;
 import com.codepresso.codepresso.coupon.repository.StampRepository;
+import com.codepresso.codepresso.coupon.service.StampFacade;
 import com.codepresso.codepresso.coupon.service.StampService;
 import com.codepresso.codepresso.member.entity.Member;
 import com.codepresso.codepresso.member.repository.MemberRepository;
@@ -31,6 +32,9 @@ class StampConcurrencyTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private StampFacade stampFacade;
 
     private Member testMember;
 
@@ -76,7 +80,8 @@ class StampConcurrencyTest {
         for(int i = 0; i < threadCount; i++) {
             executorService.submit(() -> {
                 try {
-                    stampService.earnStampsFromOrder(testMember.getId(), List.of(mockDetail));
+//                    stampService.earnStampsFromOrder(testMember.getId(), List.of(mockDetail));
+                    stampFacade.earnStampsWithRetry(testMember.getId(), List.of(mockDetail));
                     successCount.incrementAndGet();
                 }catch (Exception e) {
                     System.out.println("실패 : " + e.getMessage());
