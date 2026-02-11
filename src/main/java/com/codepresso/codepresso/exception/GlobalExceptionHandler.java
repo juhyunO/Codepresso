@@ -3,6 +3,7 @@ package com.codepresso.codepresso.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -32,5 +33,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> handleRuntimeException(RuntimeException ex) {
         log.error("Runtime exception occurred: {}", ex.getMessage(), ex);
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(OptimisticLockConflictException.class)
+    public ResponseEntity<String> handleOptimisticLockConflictException(OptimisticLockConflictException ex) {
+        return new ResponseEntity<>("요청이 충돌했습니다. 다시 시도해주세요.", HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<String> handleObjectOptimisticLockingFailureException(ObjectOptimisticLockingFailureException ex) {
+        return new ResponseEntity<>("동시 수정 충돌이 발생했습니다. 다시 시도해주세요", HttpStatus.CONFLICT);
     }
 }
