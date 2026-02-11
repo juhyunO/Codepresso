@@ -27,6 +27,7 @@ public class Stamp {
     @Column(name = "quantity")
     private Integer quantity;
 
+    // 낙관적 락 테스트를 위해 추가
     @Version
     @Column(name = "version")
     private Long version;

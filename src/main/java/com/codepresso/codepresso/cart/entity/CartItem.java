@@ -41,6 +41,7 @@ public class CartItem {
     @OneToMany(mappedBy = "cartItem", cascade = CascadeType.ALL, orphanRemoval = true )
     private List<CartOption> options = new ArrayList<>();
 
+    // 낙관적 락 테스트를 위해 추가
     @Version
     @Column(name = "version")
     private Long version;
