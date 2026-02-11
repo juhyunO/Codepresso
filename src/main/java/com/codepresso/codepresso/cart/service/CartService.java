@@ -16,6 +16,9 @@ import com.codepresso.codepresso.cart.repository.CartOptionRepository;
 import com.codepresso.codepresso.cart.repository.CartRepository;
 import com.codepresso.codepresso.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +41,11 @@ public class CartService {
 
 
     // c - 아이템 추가(동일 상품+옵션 묶음이면 수량 증가, 아니면 새 행 추가)
+    @Retryable(
+            retryFor = ObjectOptimisticLockingFailureException.class,
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 100)
+    )
     public CartItem addItemWithOptions(Long memberId, Long productId, int quantity, List<Long> optionIds) {
         if (quantity <= 0) throw new IllegalArgumentException("수량은 1 이상이어야 합니다.");
 

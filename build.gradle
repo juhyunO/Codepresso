@@ -25,6 +25,10 @@ repositories {
 }
 
 dependencies {
+    // Spring Retry (낙관적 락 재시도)
+    implementation 'org.springframework.retry:spring-retry'
+    implementation 'org.springframework:spring-aspects'
+
     // =========================
     // Security (인증/인가)
     // =========================

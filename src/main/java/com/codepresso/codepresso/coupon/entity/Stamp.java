@@ -5,9 +5,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
-
-
-
 @NoArgsConstructor @AllArgsConstructor @Builder
 @Getter @Setter
 @Table(name = "stamp")
@@ -29,5 +26,9 @@ public class Stamp {
 
     @Column(name = "quantity")
     private Integer quantity;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 }
 

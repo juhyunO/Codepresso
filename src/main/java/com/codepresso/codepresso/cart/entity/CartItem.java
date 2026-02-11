@@ -41,4 +41,7 @@ public class CartItem {
     @OneToMany(mappedBy = "cartItem", cascade = CascadeType.ALL, orphanRemoval = true )
     private List<CartOption> options = new ArrayList<>();
 
+    @Version
+    @Column(name = "version")
+    private Long version;
 }

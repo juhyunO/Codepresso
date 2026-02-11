@@ -79,26 +79,17 @@ public class CouponService {
     }
 
     /**
-     * 쿠폰 할인 금액 계산 및 검증
-     * */
-    public int calculateCouponDiscount(Long couponId, int totalAmount) {
-        MemberCoupon coupon = memberCouponRepository.findById(couponId)
-                .orElseThrow(() -> new IllegalArgumentException("Member coupon not found"));
-
-        // 쿠폰 유효성 검증
-        validateCoupon(coupon);
-
-        // 할인금액 계산
-        return calculateCouponDiscountAmount(coupon.getCouponType(), totalAmount);
-    }
-
-    /**
      * 쿠폰 사용 처리 (UNUSED -> USED)
      * */
     @Transactional
     public void useCoupon(Long couponId) {
-        MemberCoupon coupon = memberCouponRepository.findById(couponId)
-                .orElseThrow(() -> new IllegalArgumentException("Member coupon not found"));
+        // 비관적 락 적용 전 로직
+//        MemberCoupon coupon = memberCouponRepository.findById(couponId)
+//                .orElseThrow(() -> new IllegalArgumentException("Member coupon not found"));
+
+        // 비관적 락으로 조회 - 동시 요청 시 다른 트랜잭션은 대기
+        MemberCoupon coupon = memberCouponRepository.findByIdWithPessimisticLock(couponId)
+                        .orElseThrow(()-> new IllegalArgumentException("Member coupon not found"));
 
         validateCoupon(coupon);
         coupon.setStatus(MemberCoupon.CouponStatus.USED);
