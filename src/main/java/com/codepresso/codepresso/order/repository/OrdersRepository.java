@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface OrdersRepository extends JpaRepository<Orders, Long> {
@@ -68,5 +69,24 @@ public interface OrdersRepository extends JpaRepository<Orders, Long> {
             "LEFT JOIN FETCH od.product " +
             "WHERE o.id = :orderId")
     Optional<Orders> findByIdWithDetails(@Param("orderId") Long orderId);
+
+    /**
+     * [N+1 발생] Fetch Join 없이 조회 - 테스트용
+     */
+    @Query("SELECT o FROM Orders o WHERE o.member.id = :memberId ORDER BY o.orderDate DESC")
+    List<Orders> findByMemberIdWithoutFetchJoin(@Param("memberId") Long memberId);
+
+    /**
+     * [N+1 해결] Fetch Join으로 모든 연관 엔티티 한번에 조회
+     * Orders -> Branch, Member, OrdersDetails, Product 모두 포함
+     */
+    @Query("SELECT DISTINCT o FROM Orders o " +
+            "LEFT JOIN FETCH o.branch " +
+            "LEFT JOIN FETCH o.member " +
+            "LEFT JOIN FETCH o.ordersDetails od " +
+            "LEFT JOIN FETCH od.product " +
+            "WHERE o.member.id = :memberId " +
+            "ORDER BY o.orderDate DESC ")
+    List<Orders> findByMemberIdWithFetchJoin(@Param("memberId") Long memberId);
 
 }
