@@ -84,7 +84,8 @@ public interface OrdersRepository extends JpaRepository<Orders, Long> {
             "LEFT JOIN FETCH o.branch " +
             "LEFT JOIN FETCH o.member " +
             "LEFT JOIN FETCH o.ordersDetails od " +
-            "LEFT JOIN FETCH od.product " +
+            "LEFT JOIN FETCH od.product p " +
+            "LEFT JOIN FETCH p.nutritionInfo " +
             "WHERE o.member.id = :memberId " +
             "ORDER BY o.orderDate DESC ")
     List<Orders> findByMemberIdWithFetchJoin(@Param("memberId") Long memberId);
