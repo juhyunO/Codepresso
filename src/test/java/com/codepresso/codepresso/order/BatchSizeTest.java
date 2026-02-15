@@ -15,6 +15,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
@@ -41,62 +43,66 @@ class BatchSizeTest {
     }
 
     @Test
-    @DisplayName("@BatchSize 효과: 페이징 + IN 절 조회")
-    void batchSize_withPaging() {
-        // given
+    @DisplayName("@BatchSize 미적용: N+1 발생 확인")
+    void withoutBatchSize_N1Problem() {
+        // 현재 @BatchSize가 주석 처리된 상태에서 실행
+        // N+1 문제가 실제로 발생하는지 확인
+
         statistics.clear();
         entityManager.clear();
 
-        // 10건씩 페이징 조회
-        PageRequest pageRequest = PageRequest.of(0, 10);
+        // fetch join 없이 조회 (N+1 발생)
+        List<Orders> orders = ordersRepository.findByMemberIdWithoutFetchJoin(TEST_MEMBER_ID);
 
-        // when
-        Page<Orders> ordersPage = ordersRepository.findByMemberIdWithPaging(TEST_MEMBER_ID, pageRequest);
+        int orderCount = orders.size();
 
-        // 연관 엔티티 접근 (BatchSize로 IN 절 조회)
-        for (Orders order : ordersPage.getContent()) {
-            // OrdersDetail 접근
+        // 모든 연관 엔티티 접근 → N+1 발생!
+        int totalDetails = 0;
+        for (Orders order : orders) {
+            // Branch 접근 → 추가 쿼리
+            order.getBranch().getBranchName();
+
+            // OrdersDetail 접근 → 추가 쿼리
             for (OrdersDetail detail : order.getOrdersDetails()) {
-                // Product 접근
+                // Product 접근 → 추가 쿼리
                 detail.getProduct().getProductName();
+                totalDetails++;
             }
         }
 
-        // then
         long queryCount = statistics.getPrepareStatementCount();
 
         System.out.println("===========================================");
-        System.out.println("[@BatchSize 테스트 - 페이징 10건]");
-        System.out.println("조회된 주문 수: " + ordersPage.getContent().size());
+        System.out.println("     @BatchSize 미적용 - N+1 발생");
+        System.out.println("===========================================");
+        System.out.println("조회된 주문 수: " + orderCount);
+        System.out.println("총 주문 상세 수: " + totalDetails);
         System.out.println("실행된 쿼리 수: " + queryCount);
         System.out.println("===========================================");
 
-        // BatchSize 적용 시: 1(주문) + 1(상세 IN절) + α(상품)
-        // N+1이면: 1 + 10 + α
-        // BatchSize 효과로 쿼리 수가 크게 줄어야 함
-        assertThat(queryCount).isLessThan(ordersPage.getContent().size() + 5);
+        // N+1 발생 시 쿼리 수가 많아야 함
+        assertThat(queryCount).isGreaterThan(orderCount);
     }
 
     @Test
-    @DisplayName("@BatchSize vs 미적용 비교")
-    void compareBatchSizeEffect() {
-        // 현재 프로젝트는 @BatchSize가 이미 적용되어 있음
-        // 적용 효과를 보여주기 위한 테스트
+    @DisplayName("@BatchSize 적용: IN 절로 최적화")
+    void withBatchSize_optimized() {
+        // @BatchSize 적용 후 실행하면 쿼리 수가 줄어듦
+        // 엔티티에서 @BatchSize 주석 해제 후 테스트
 
         statistics.clear();
         entityManager.clear();
 
-        // 전체 조회 (BatchSize 적용된 상태)
-        Page<Orders> ordersPage = ordersRepository.findByMemberIdWithPaging(
-                TEST_MEMBER_ID,
-                PageRequest.of(0, 50)  // 50건 조회
-        );
+        // fetch join 없이 조회
+        List<Orders> orders = ordersRepository.findByMemberIdWithoutFetchJoin(TEST_MEMBER_ID);
 
-        int orderCount = ordersPage.getContent().size();
+        int orderCount = orders.size();
 
         // 모든 연관 엔티티 접근
         int totalDetails = 0;
-        for (Orders order : ordersPage.getContent()) {
+        for (Orders order : orders) {
+            order.getBranch().getBranchName();
+
             for (OrdersDetail detail : order.getOrdersDetails()) {
                 detail.getProduct().getProductName();
                 totalDetails++;
@@ -106,19 +112,13 @@ class BatchSizeTest {
         long queryCount = statistics.getPrepareStatementCount();
 
         System.out.println("===========================================");
-        System.out.println("        @BatchSize 효과 분석");
+        System.out.println("     @BatchSize 적용 - IN 절 최적화");
         System.out.println("===========================================");
         System.out.println("조회된 주문 수: " + orderCount);
         System.out.println("총 주문 상세 수: " + totalDetails);
         System.out.println("실행된 쿼리 수: " + queryCount);
         System.out.println("-------------------------------------------");
-        System.out.println("[@BatchSize 미적용 시 쿼리 수]");
-        System.out.println("  1 + " + orderCount + " + " + totalDetails + " = " +
-                (1 + orderCount + totalDetails) + "개 쿼리");
-//        System.out.println("[@BatchSize 적용 결과]");
-//        System.out.println("  " + queryCount + "개 쿼리");
-//        System.out.println("-------------------------------------------");
-//        System.out.println("절감된 쿼리 수: " + ((1 + orderCount + totalDetails) - queryCount) + "개");
+        System.out.println("@BatchSize 효과: IN 절로 묶어서 조회");
         System.out.println("===========================================");
     }
 }

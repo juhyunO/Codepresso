@@ -47,7 +47,7 @@ public class Orders {
     private Boolean isPickup;
 
     // 주문 마스터 <-> 주문상세 (1:N)
-    // @BatchSize(size = 100)  // 테스트를 위해 임시 주석 처리
+    @BatchSize(size = 100)  // 테스트를 위해 임시 주석 처리
     @OneToMany(mappedBy = "orders", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrdersDetail> ordersDetails;
 

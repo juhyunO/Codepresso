@@ -33,7 +33,7 @@ public class OrdersDetail {
     @Column(name = "quantity")
     private Integer quantity;
 
-    // @BatchSize(size = 100)  // 테스트를 위해 임시 주석 처리
+    @BatchSize(size = 100)  // 테스트를 위해 임시 주석 처리
     @OneToMany(mappedBy = "ordersDetail", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrdersItemOptions> options;
 }
