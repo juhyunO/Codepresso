@@ -42,7 +42,7 @@ public class PasswordFindService {
     @Transactional
     public PasswordFindResponse findPassword(PasswordFindRequest request) {
         try {
-            Member member = memberRepository.findByAccountIdAndEmail(request.getAccountId(), request.getEmail())
+            memberRepository.findByAccountIdAndEmail(request.getAccountId(), request.getEmail())
                     .orElseThrow(() -> new NoSuchElementException("아이디 또는 이메일이 일치하지 않습니다."));
 
             String verificationCode = generatePasswordResetCode();
