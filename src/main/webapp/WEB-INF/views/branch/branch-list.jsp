@@ -26,14 +26,14 @@
                         <line x1="20" y1="20" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                 </button>
-                <c:if test="${not empty lat}">
-                    <input type="hidden" name="lat" value="${lat}" />
+                <c:if test="${not empty response.lat}">
+                    <input type="hidden" name="lat" value="${response.lat}" />
                 </c:if>
-                <c:if test="${not empty lng}">
-                    <input type="hidden" name="lng" value="${lng}" />
+                <c:if test="${not empty response.lng}">
+                    <input type="hidden" name="lng" value="${response.lng}" />
                 </c:if>
-                <c:if test="${not empty radius}">
-                    <input type="hidden" name="radius" value="${radius}" />
+                <c:if test="${not empty response.radius}">
+                    <input type="hidden" name="radius" value="${response.radius}" />
                 </c:if>
             </form>
         </section>
@@ -117,7 +117,7 @@
         </style>
 
         <c:choose>
-            <c:when test="${not empty branches}">
+            <c:when test="${not empty response.branches}">
                 <div id="branchGrid" class="branch-grid">
                     <jsp:include page="/WEB-INF/views/branch/branch-cards.jsp" />
                 </div>
@@ -212,8 +212,8 @@
   }
 
   (function(){
-    var nextPage = ${hasNext ? nextPage : -1};
-    var pageSize = ${pageSize};
+    var nextPage = ${response.hasNext ? response.currentPage + 1 : -1};
+    var pageSize = ${response.pageSize};
     var grid = document.getElementById('branchGrid');
     var more = document.getElementById('loadMoreLink');
     var sep = document.getElementById('moreSep');

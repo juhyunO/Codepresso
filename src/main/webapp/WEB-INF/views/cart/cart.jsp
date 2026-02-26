@@ -835,7 +835,7 @@
                 setBranchSelection(initialId, initialName);
             } else {
                 setBranchSelection(initialId, '매장 정보를 불러오는 중...');
-                fetch(`/branch/info/${initialId}`)
+                fetch(`/api/branch/${initialId}`)
                     .then(res => {
                         if (!res.ok) throw new Error('Failed to load branch info');
                         return res.json();
