@@ -190,7 +190,6 @@
 
     // 이메일 인증 상태
     let isEmailVerified = false;
-    let emailVerificationCode = '';
 
     // ===== 2) 유효성 검사 규칙 =====
     // - accountId: 4~50자, 영문/숫자/밑줄
@@ -328,14 +327,13 @@
                 body: JSON.stringify({ email })
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || '이메일 발송 실패');
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || '이메일 발송 실패');
             }
 
-            const data = await response.json();
-            emailVerificationCode = data.verificationCode;
-
+            // verificationCode 저장 제거 (서버에서 검증)
             setMsg(emailMsg, '인증번호가 이메일로 발송되었습니다.', true);
             document.getElementById('emailVerification').classList.add('active');
 
@@ -346,20 +344,35 @@
     }
 
     async function confirmEmailVerification() {
-        const inputCode = emailVerificationCodeInput.value.trim();
+        const email = emailInput.value.trim();
+        const code = emailVerificationCodeInput.value.trim();
 
-        if (!inputCode) {
+        if (!code) {
             setMsg(emailVerificationMsg, '인증번호를 입력해주세요.', false);
             return;
         }
 
-        if (inputCode === emailVerificationCode) {
-            setMsg(emailVerificationMsg, '이메일 인증이 완료되었습니다.', true);
-            isEmailVerified = true;
-            document.getElementById('verifyEmailBtn').textContent = '인증완료';
-            document.getElementById('verifyEmailBtn').disabled = true;
-        } else {
-            setMsg(emailVerificationMsg, '인증번호가 일치하지 않습니다.', false);
+        try {
+            //서버에서 검증
+            const response = await fetch('/api/auth/verify-email-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, code })
+            });
+
+            const data = await response.json();
+
+            if(data.valid) {
+                setMsg(emailVerificationMsg, '이메일 인증이 완료되었습니다.', true);
+                isEmailVerified = true;
+                document.getElementById('verifyEmailBtn').textContent = '인증완료';
+                document.getElementById('verifyEmailBtn').disabled = true;
+            }else {
+                setMsg(emailVerificationMsg, data.message || '인증번호가 일치하지 않습니다.', false);
+            }
+        }catch (error) {
+            console.error('인증 확인 실패:', error);
+            setMsg(emailVerificationMsg, '인증 확인 중 오류가 발생했습니다.', false);
         }
     }
 
