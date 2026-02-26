@@ -30,6 +30,6 @@ public class Stamp {
     // 낙관적 락 테스트를 위해 추가
     @Version
     @Column(name = "version")
-    private Long version;
+    private Long version = 0L;
 }
 

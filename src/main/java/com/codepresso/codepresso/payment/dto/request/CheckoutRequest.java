@@ -1,4 +1,4 @@
-package com.codepresso.codepresso.payment.dto;
+package com.codepresso.codepresso.payment.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;

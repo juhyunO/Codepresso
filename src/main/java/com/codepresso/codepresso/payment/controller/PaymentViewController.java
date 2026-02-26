@@ -1,6 +1,7 @@
 package com.codepresso.codepresso.payment.controller;
 
-import com.codepresso.codepresso.payment.dto.CheckoutResponse;
+import com.codepresso.codepresso.payment.dto.response.CheckoutResponse;
+import com.codepresso.codepresso.payment.service.CheckoutService;
 import com.codepresso.codepresso.security.LoginUser;
 import com.codepresso.codepresso.coupon.service.CouponService;
 import com.codepresso.codepresso.coupon.service.StampService;
@@ -23,6 +24,7 @@ public class PaymentViewController {
     private final PaymentService paymentService;
     private final CouponService couponService;
     private final StampService stampService;
+    private final CheckoutService checkoutService;
 
     /**
      * 장바구니에서 결제페이지로
@@ -37,7 +39,7 @@ public class PaymentViewController {
                 return "redirect:/auth/login?redirect=/payments/cart";
             }
 
-            CheckoutResponse checkoutData = paymentService.prepareCartCheckout(loginUser.getMemberId());
+            CheckoutResponse checkoutData = checkoutService.prepareCartCheckout(loginUser.getMemberId());
 
             Map<String, Object> cartData = new HashMap<>();
             cartData.put("items", checkoutData.getOrderItems());
@@ -72,7 +74,7 @@ public class PaymentViewController {
     ) {
         try {
             // 직접 주문 데이터 준비
-            CheckoutResponse checkoutData = paymentService.prepareDirectCheckout(productId, quantity, optionIds);
+            CheckoutResponse checkoutData = checkoutService.prepareDirectCheckout(productId, quantity, optionIds);
 
             model.addAttribute("directItems", checkoutData.toDirectItemsMap());
             model.addAttribute("directItemsCount", checkoutData.getOrderItems().size());
@@ -121,7 +123,7 @@ public class PaymentViewController {
 
             // 직접결제인 경우 (productId가 있으면)
             if (productId != null && quantity != null) {
-                CheckoutResponse checkoutData = paymentService.prepareDirectCheckout(productId, quantity, optionIds);
+                CheckoutResponse checkoutData = checkoutService.prepareDirectCheckout(productId, quantity, optionIds);
                 model.addAttribute("directItems", checkoutData.toDirectItemsMap());
                 model.addAttribute("directItemsCount", checkoutData.getOrderItems().size());
                 model.addAttribute("totalQuantity", checkoutData.getTotalQuantity());
@@ -129,7 +131,7 @@ public class PaymentViewController {
             }
             // 장바구니 결제인 경우
             else {
-                CheckoutResponse checkoutData = paymentService.prepareCartCheckout(loginUser.getMemberId());
+                CheckoutResponse checkoutData = checkoutService.prepareCartCheckout(loginUser.getMemberId());
                 model.addAttribute("orderItems", checkoutData.getOrderItems());
                 model.addAttribute("totalQuantity", checkoutData.getTotalQuantity());
                 model.addAttribute("isFromCart", true);

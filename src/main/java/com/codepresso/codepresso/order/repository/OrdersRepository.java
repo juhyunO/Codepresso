@@ -90,4 +90,14 @@ public interface OrdersRepository extends JpaRepository<Orders, Long> {
             "ORDER BY o.orderDate DESC ")
     List<Orders> findByMemberIdWithFetchJoin(@Param("memberId") Long memberId);
 
+    @Query("SELECT DISTINCT o FROM Orders o " +
+            "LEFT JOIN FETCH o.ordersDetails od " +
+            "LEFT JOIN FETCH od.product " +
+            "LEFT JOIN FETCH od.options oio " +
+            "LEFT JOIN FETCH oio.option po " +
+            "LEFT JOIN FETCH po.optionStyle os " +
+            "LEFT JOIN FETCH os.optionName " +
+            "WHERE o.id = :orderId")
+    Optional<Orders> findByIdWithDetailsAndOptions(@Param("orderId") Long orderId);
+
 }

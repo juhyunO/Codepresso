@@ -1,345 +1,234 @@
 package com.codepresso.codepresso.payment.service;
 
-import com.codepresso.codepresso.cart.dto.CartItemResponse;
-import com.codepresso.codepresso.cart.dto.CartOptionResponse;
-import com.codepresso.codepresso.cart.dto.CartResponse;
-import com.codepresso.codepresso.payment.dto.CheckoutRequest;
-import com.codepresso.codepresso.payment.dto.CheckoutResponse;
-import com.codepresso.codepresso.payment.dto.TossPaymentSuccessRequest;
-import com.codepresso.codepresso.product.dto.ProductDetailResponse;
-import com.codepresso.codepresso.product.dto.ProductOptionDTO;
-import com.codepresso.codepresso.branch.entity.Branch;
-import com.codepresso.codepresso.member.entity.Member;
+import java.time.format.DateTimeFormatter;
+import com.codepresso.codepresso.payment.dto.request.PaymentRequest;
+import com.codepresso.codepresso.payment.dto.response.CheckoutResponse;
+import com.codepresso.codepresso.payment.dto.request.TossPaymentSuccessRequest;
+import com.codepresso.codepresso.payment.dto.response.PaymentResponse;
+import com.codepresso.codepresso.payment.dto.response.TossPaymentConfirmResponse;
+import com.codepresso.codepresso.payment.entity.Payment;
+import com.codepresso.codepresso.payment.entity.PaymentDetail;
+import com.codepresso.codepresso.payment.entity.PaymentMethod;
+import com.codepresso.codepresso.payment.entity.PaymentStatus;
+import com.codepresso.codepresso.payment.repository.PaymentRepository;
 import com.codepresso.codepresso.order.entity.Orders;
 import com.codepresso.codepresso.order.entity.OrdersDetail;
 import com.codepresso.codepresso.order.entity.OrdersItemOptions;
-import com.codepresso.codepresso.branch.repository.BranchRepository;
-import com.codepresso.codepresso.member.repository.MemberRepository;
 import com.codepresso.codepresso.order.repository.OrdersRepository;
-import com.codepresso.codepresso.cart.service.CartService;
-import com.codepresso.codepresso.coupon.service.CouponService;
-import com.codepresso.codepresso.coupon.service.StampService;
-import com.codepresso.codepresso.product.service.ProductService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 결제 서비스
  */
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
 
-    private final MemberRepository memberRepository;
+    private final PaymentRepository paymentRepository;
     private final OrdersRepository ordersRepository;
-    private final BranchRepository branchRepository;
-    private final CartService cartService;
-    private final ProductService productService;
-    private final CouponService couponService;
-    private final StampService stampService;
+    private final TossPaymentClient tossPaymentClient;
     private final OrderCreationService orderCreationService;
 
     /**
-     * 장바구니 결제페이지 데이터 준비
+     * Toss 결제 승인 및 주문/결제 저장 (프론트에서 호출)
      */
-    public CheckoutResponse prepareCartCheckout(Long memberId) {
-        CartResponse cartData = cartService.getCartByMemberId(memberId);
+    @Transactional
+    public CheckoutResponse processTossPaymentSuccess(TossPaymentSuccessRequest request) {
+        // 1. 주문 생성 (장바구니/쿠폰/스탬프 처리 포함)
+        Orders savedOrder = orderCreationService.createOrderFromPayment(request);
 
-        int totalAmount = cartData.getItems().stream()
-                .mapToInt(CartItemResponse::getPrice)
-                .sum();
+        TossPaymentConfirmResponse tossResponse = tossPaymentClient.getPaymentByPaymentKey(request.getPaymentKey());
 
-        int totalQuantity = cartData.getItems().stream()
-                .mapToInt(CartItemResponse::getQuantity)
-                .sum();
+        // 2. Payment 엔티티 저장 (Toss 결제 정보)
+        Payment payment;
+        if(tossResponse != null) {
+            payment = createPaymentFromTossResponse(tossResponse, savedOrder);
+        }else {
+            payment = createPaymentFromRequest(request, savedOrder);
+        }
+        paymentRepository.save(payment);
 
-        List<CheckoutResponse.OrderItem> orderItems = cartData.getItems().stream()
-                .map(this::convertCartItemToOrderItem)
-                .collect(Collectors.toList());
+        if (tossResponse != null && tossResponse.getCard() != null) {
+            PaymentDetail detail = createPaymentDetail(tossResponse, payment);
+            payment.setPaymentDetail(detail);
+        }
 
-        return buildCheckoutResponse(totalAmount, totalQuantity, true, orderItems);
+        log.info("결제 저장 완료 - paymentKey: {}, orderId: {}",
+                request.getPaymentKey(), savedOrder.getId());
+
+        // 3. 응답 생성
+        return buildCheckoutResponse(savedOrder);
     }
 
     /**
-     * 직접 결제페이지 데이터 준비
+     * Toss API로 결제 승인 후 저장 (새로운 API 방식)
      */
-    public CheckoutResponse prepareDirectCheckout(Long productId, Integer quantity, List<Long> optionIds) {
-        validateQuantity(quantity);
+    @Transactional
+    public PaymentResponse confirmPayment(PaymentRequest request, Long memberId) {
+        // 1. 중복 결제 체크
+        if (paymentRepository.existsByPaymentKey(request.getPaymentKey())) {
+            throw new IllegalStateException("이미 처리된 결제입니다.");
+        }
 
-        ProductDetailResponse productDetail = productService.findByProductId(productId);
-        List<ProductOptionDTO> selectedOptions = new ArrayList<>();
-        int totalAmount = calculateTotalAmount(productDetail, optionIds, quantity, selectedOptions);
+        // 2. Toss API로 결제 승인
+        TossPaymentConfirmResponse tossResponse = tossPaymentClient.confirm(
+                request.getPaymentKey(),
+                request.getOrderId(),
+                request.getAmount()
+        );
 
-        CheckoutResponse.OrderItem orderItem = convertDirectItemToOrderItem(
-                productDetail, selectedOptions, quantity, totalAmount, optionIds);
+        // 3. 주문 조회
+        Long orderId = extractOrderId(request.getOrderId());
+        Orders orders = ordersRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
 
-        return buildCheckoutResponse(totalAmount, quantity, false, Collections.singletonList(orderItem));
+        // 4. 주문 소유자 검증
+        if (!orders.getMember().getId().equals(memberId)) {
+            throw new IllegalStateException("본인의 주문만 결제할 수 있습니다.");
+        }
+
+        // 5. Payment 엔티티 저장
+        Payment payment = createPaymentFromTossResponse(tossResponse, orders);
+        paymentRepository.save(payment);
+
+        // 6. 카드 결제인 경우 PaymentDetail 저장
+        if (tossResponse.getCard() != null) {
+            PaymentDetail detail = createPaymentDetail(tossResponse, payment);
+            payment.setPaymentDetail(detail);
+        }
+
+        log.info("결제 승인 완료 - paymentKey: {}, orderId: {}",
+                payment.getPaymentKey(), orderId);
+
+        return PaymentResponse.from(payment);
+    }
+
+    /**
+     * 결제 내역 조회
+     */
+    @Transactional(readOnly = true)
+    public PaymentResponse getPayment(Long paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다: " + paymentId));
+        return PaymentResponse.from(payment);
+    }
+
+    /**
+     * 회원 결제 내역 조회
+     */
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getPaymentsByMember(Long memberId) {
+        return paymentRepository.findByOrdersMemberId(memberId).stream()
+                .map(PaymentResponse::from)
+                .toList();
+    }
+
+    /**
+     * 주문 ID로 결제 조회
+     */
+    @Transactional(readOnly = true)
+    public PaymentResponse getPaymentByOrderId(Long orderId) {
+        Payment payment = paymentRepository.findByOrdersId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 주문의 결제 정보를 찾을 수 없습니다: " + orderId));
+        return PaymentResponse.from(payment);
     }
 
     // ========== Private Helper Methods ==========
 
-    /**
-     * CheckoutResponse 빌더 공통 로직
-     */
-    private CheckoutResponse buildCheckoutResponse(
-            Integer totalAmount,
-            Integer totalQuantity,
-            Boolean isFromCart,
-            List<CheckoutResponse.OrderItem> orderItems) {
-
-        return CheckoutResponse.builder()
-                .totalAmount(totalAmount)
-                .totalQuantity(totalQuantity)
-                .isFromCart(isFromCart)
-                .orderItems(orderItems)
+    private Payment createPaymentFromRequest(TossPaymentSuccessRequest request, Orders orders) {
+        return Payment.builder()
+                .orders(orders)
+                .paymentKey(request.getPaymentKey())
+                .amount(request.getAmount())
+                .status(PaymentStatus.DONE)
+                .method(PaymentMethod.CARD)
+                .approvedAt(LocalDateTime.now())
+                .requestedAt(LocalDateTime.now())
                 .build();
     }
 
-    /**
-     * 수량 검증
-     */
-    private void validateQuantity(Integer quantity) {
-        if (quantity == null || quantity <= 0) {
-            throw new IllegalArgumentException("수량은 1 이상이어야 합니다.");
-        }
-    }
-
-    /**
-     * CartItemResponse를 CheckoutResponse.OrderItem으로 변환
-     */
-    private CheckoutResponse.OrderItem convertCartItemToOrderItem(CartItemResponse cartItem) {
-        int unitPrice = cartItem.getPrice() / cartItem.getQuantity();
-
-        return CheckoutResponse.OrderItem.builder()
-                .productId(cartItem.getProductId())
-                .productName(cartItem.getProductName())
-                .productPhoto(cartItem.getProductPhoto())
-                .quantity(cartItem.getQuantity())
-                .unitPrice(unitPrice)
-                .price(cartItem.getPrice())
-                .lineTotal(cartItem.getPrice())
-                .optionIds(extractOptionIdsFromCartItem(cartItem))
-                .optionNames(extractOptionNamesFromCartItem(cartItem))
+    private Payment createPaymentFromTossResponse(TossPaymentConfirmResponse response, Orders orders) {
+        return Payment.builder()
+                .orders(orders)
+                .paymentKey(response.getPaymentKey())
+                .amount(response.getTotalAmount())
+                .status(convertStatus(response.getStatus()))
+                .method(convertMethod(response.getMethod()))
+                .approvedAt(parseDateTime(response.getApprovedAt()))
+                .requestedAt(parseDateTime(response.getRequestedAt()))
+                .receiptUrl(response.getReceipt() != null ? response.getReceipt().getUrl() : null)
                 .build();
     }
 
-    /**
-     * 직접 결제 정보를 CheckoutResponse.OrderItem으로 변환
-     */
-    private CheckoutResponse.OrderItem convertDirectItemToOrderItem(
-            ProductDetailResponse productDetail,
-            List<ProductOptionDTO> selectedOptions,
-            Integer quantity,
-            Integer totalAmount,
-            List<Long> optionIds) {
-
-        int unitPrice = totalAmount / quantity;
-
-        return CheckoutResponse.OrderItem.builder()
-                .productId(productDetail.getProductId())
-                .productName(productDetail.getProductName())
-                .productPhoto(productDetail.getProductPhoto())
-                .quantity(quantity)
-                .unitPrice(unitPrice)
-                .price(unitPrice)
-                .lineTotal(totalAmount)
-                .optionIds(optionIds != null ? optionIds : Collections.emptyList())
-                .optionNames(extractOptionNamesFromProductOptions(selectedOptions))
+    private PaymentDetail createPaymentDetail(TossPaymentConfirmResponse response, Payment payment) {
+        TossPaymentConfirmResponse.TossCard card = response.getCard();
+        return PaymentDetail.builder()
+                .payment(payment)
+                .cardCompany(card.getCompany())
+                .cardNumber(card.getNumber())
+                .installmentMonths(card.getInstallmentPlanMonths())
+                .cardType(card.getCardType())
+                .ownerType(card.getOwnerType())
+                .acquireStatus(card.getAcquireStatus())
                 .build();
     }
 
-    /**
-     * CartItem 옵션 ID 추출
-     */
-    private List<Long> extractOptionIdsFromCartItem(CartItemResponse cartItem) {
-        if (cartItem.getOptions() == null || cartItem.getOptions().isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return cartItem.getOptions().stream()
-                .map(CartOptionResponse::getOptionId)
-                .collect(Collectors.toList());
+    private PaymentStatus convertStatus(String status) {
+        return switch (status) {
+            case "READY" -> PaymentStatus.READY;
+            case "IN_PROGRESS" -> PaymentStatus.IN_PROGRESS;
+            case "DONE" -> PaymentStatus.DONE;
+            case "CANCELED" -> PaymentStatus.CANCELED;
+            case "PARTIAL_CANCELED" -> PaymentStatus.PARTIAL_CANCELED;
+            default -> PaymentStatus.FAILED;
+        };
     }
 
-    /**
-     * CartItem 옵션 이름 추출
-     */
-    private List<String> extractOptionNamesFromCartItem(CartItemResponse cartItem) {
-        if (cartItem.getOptions() == null || cartItem.getOptions().isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return cartItem.getOptions().stream()
-                .map(CartOptionResponse::getOptionStyle)
-                .collect(Collectors.toList());
+    private PaymentMethod convertMethod(String method) {
+        return switch (method) {
+            case "카드" -> PaymentMethod.CARD;
+            case "계좌이체" -> PaymentMethod.TRANSFER;
+            case "가상계좌" -> PaymentMethod.VIRTUAL_ACCOUNT;
+            case "휴대폰" -> PaymentMethod.MOBILE;
+            case "간편결제" -> PaymentMethod.EASY_PAY;
+            default -> PaymentMethod.CARD;
+        };
     }
 
-    /**
-     * ProductOptionDTO 옵션 이름 추출
-     */
-    private List<String> extractOptionNamesFromProductOptions(List<ProductOptionDTO> selectedOptions) {
-        if (selectedOptions == null || selectedOptions.isEmpty()) {
-            return Collections.emptyList();
+    private LocalDateTime parseDateTime(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isEmpty()) {
+            return null;
         }
-
-        return selectedOptions.stream()
-                .map(ProductOptionDTO::getOptionStyleName)
-                .collect(Collectors.toList());
+        return LocalDateTime.parse(dateTimeStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 
-
-    /**
-     * 총 가격 계산 및 선택된 옵션 수집
-     */
-    private int calculateTotalAmount(ProductDetailResponse productDetail, List<Long> optionIds,
-                                     Integer quantity, List<ProductOptionDTO> selectedOptions) {
-
-        int basePrice = (productDetail.getPrice() != null) ? productDetail.getPrice() : 0;
-        int optionPrice = 0;
-
-        // 옵션이 선택된 경우
-        if (optionIds != null && !optionIds.isEmpty()) {
-            // 선택된 옵션들 찾기 및 가격 계산
-            for (Long optionId : optionIds) {
-                ProductOptionDTO foundOption = productDetail.getProductOptions().stream()
-                        .filter(option -> option.getOptionId().equals(optionId))
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 옵션입니다: " + optionId));
-
-                selectedOptions.add(foundOption);
-                optionPrice += (foundOption.getExtraPrice() != null) ? foundOption.getExtraPrice() : 0;
+    private Long extractOrderId(String orderId) {
+        try {
+            return Long.parseLong(orderId);
+        } catch (NumberFormatException e) {
+            String[] parts = orderId.split("_");
+            if (parts.length > 1) {
+                return Long.parseLong(parts[parts.length - 1]);
             }
+            throw new IllegalArgumentException("잘못된 주문 ID 형식입니다: " + orderId);
         }
-        return (basePrice + optionPrice) * quantity;
-    }
-
-    /**
-     * 토스페이먼츠 결제 성공 시 주문 생성
-     */
-    @Transactional
-    public CheckoutResponse processTossPaymentSuccess(TossPaymentSuccessRequest request) {
-        // 1. 회원 및 지점 정보 조회
-        Member member = memberRepository.findById(request.getMemberId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다."));
-
-        Branch branch = branchRepository.findById(request.getBranchId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 지점입니다."));
-
-        // 2. 주문 생성
-        Orders orders = createTossOrder(request, member, branch);
-
-        // 3. 주문 상세 생성
-        List<CheckoutRequest.OrderItem> checkoutItems = request.getOrderItems().stream()
-                .map(this::convertToCheckoutOrderItem)
-                .collect(Collectors.toList());
-
-        // 4. 주문 저장
-        List<OrdersDetail> ordersDetails = orderCreationService.createOrderDetails(checkoutItems,orders);
-        orders.setOrdersDetails(ordersDetails);
-
-        Orders savedOrder = ordersRepository.save(orders);
-
-        // 5. 장바구니 비우기 로직 추가
-        if (Boolean.TRUE.equals(request.getIsFromCart())) {
-            try {
-                CartResponse cartData = cartService.getCartByMemberId(member.getId());
-                cartService.clearCart(member.getId(), cartData.getCartId());
-                System.out.println("✅ 토스 결제 후 장바구니 비우기 성공");
-            } catch (Exception e) {
-                System.err.println("❌ 토스 결제 후 장바구니 비우기 실패: " + e.getMessage());
-                e.printStackTrace();
-            }
-        }
-
-        // 6. 쿠폰 사용 처리
-        if (Boolean.TRUE.equals(request.getUseCoupon()) && request.getDiscountAmount() != null && request.getDiscountAmount() > 0) {
-            try {
-                // 회원의 사용 가능한 쿠폰 중 첫 번째 쿠폰 사용
-                var validCoupons = couponService.getMemberValidCoupons(member.getId());
-                if (!validCoupons.isEmpty()) {
-                    Long couponId = validCoupons.get(0).getCouponId();
-                    couponService.useCoupon(couponId);
-                }
-            } catch (Exception e) {
-                System.err.println("❌ 쿠폰 사용 처리 실패: " + e.getMessage());
-                e.printStackTrace();
-            }
-        }
-
-        // stamp 적립
-        try{
-            stampService.earnStampsFromOrder(member.getId(), ordersDetails);
-        }catch(Exception e){
-            e.printStackTrace();
-        }
-
-        // 5. 응답 데이터 생성
-        return buildCheckoutResponse(savedOrder);
-    }
-
-    private Orders createTossOrder(TossPaymentSuccessRequest request, Member member, Branch branch) {
-        // String을 LocalDateTime으로 변환
-        LocalDateTime pickupTime = null;
-        if (request.getPickupTime() != null && !request.getPickupTime().isEmpty()) {
-            try {
-                pickupTime = LocalDateTime.parse(request.getPickupTime());
-            } catch (Exception e) {
-                // 파싱 실패 시 현재 시간 + 5분으로 설정
-                pickupTime = LocalDateTime.now().plusMinutes(5);
-            }
-        } else {
-            // pickupTime이 없으면 현재 시간 + 5분으로 설정
-            pickupTime = LocalDateTime.now().plusMinutes(5);
-        }
-
-        int discountAmount = (request.getUseCoupon() != null && request.getUseCoupon() && request.getDiscountAmount() != null)
-                ? request.getDiscountAmount() : 0;
-        int finalAmount = request.getAmount() != null ? request.getAmount() : 0;
-        int totalAmount = finalAmount + discountAmount;
-
-        return Orders.builder()
-                .member(member)
-                .branch(branch)
-                .productionStatus("픽업완료")
-                .isTakeout(request.getIsTakeout())
-                .pickupTime(pickupTime)
-                .orderDate(LocalDateTime.now())
-                .requestNote(request.getRequestNote())
-                .isPickup(true)
-                .totalAmount(totalAmount)
-                .discountAmount(discountAmount)
-                .finalAmount(finalAmount)
-                .build();
-    }
-
-    /**
-     * TossPaymentSuccessRequest.OrderItem을 CheckoutRequest.OrderItem으로 변환
-     */
-    private CheckoutRequest.OrderItem convertToCheckoutOrderItem(TossPaymentSuccessRequest.OrderItem tossItem) {
-        return CheckoutRequest.OrderItem.builder()
-                .productId(tossItem.getProductId())
-                .quantity(tossItem.getQuantity())
-                .price(tossItem.getPrice())
-                .optionIds(tossItem.getOptionIds())
-                .build();
     }
 
     private CheckoutResponse buildCheckoutResponse(Orders orders) {
-        Orders fetchedOrders = ordersRepository.findByIdWithDetails(orders.getId())
+        Orders fetchedOrders = ordersRepository.findByIdWithDetailsAndOptions(orders.getId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
 
-        // 주문 상세 정보 리스트 생성
         List<CheckoutResponse.OrderItem> orderItems = new ArrayList<>();
 
-        // 각 주문 상세를 OrderItem으로 변환
         for (OrdersDetail detail : fetchedOrders.getOrdersDetails()) {
-            // 옵션 이름들 수집
             List<String> optionNames = new ArrayList<>();
             if (detail.getOptions() != null) {
                 for (OrdersItemOptions option : detail.getOptions()) {
@@ -347,7 +236,6 @@ public class PaymentService {
                 }
             }
 
-            // OrderItem 생성
             CheckoutResponse.OrderItem orderItem = CheckoutResponse.OrderItem.builder()
                     .orderDetailId(detail.getId())
                     .productName(detail.getProduct().getProductName())
@@ -359,13 +247,10 @@ public class PaymentService {
             orderItems.add(orderItem);
         }
 
-        // 총 주문 금액 계산
-        int totalAmount = 0;
-        for (OrdersDetail detail : fetchedOrders.getOrdersDetails()) {
-            totalAmount += detail.getPrice();
-        }
+        int totalAmount = fetchedOrders.getOrdersDetails().stream()
+                .mapToInt(OrdersDetail::getPrice)
+                .sum();
 
-        // 최종 응답 객체 생성
         return CheckoutResponse.builder()
                 .orderId(fetchedOrders.getId())
                 .productionStatus(fetchedOrders.getProductionStatus())

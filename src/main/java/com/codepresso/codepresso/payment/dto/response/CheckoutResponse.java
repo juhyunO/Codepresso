@@ -1,4 +1,4 @@
-package com.codepresso.codepresso.payment.dto;
+package com.codepresso.codepresso.payment.dto.response;
 
 import lombok.Builder;
 import lombok.Data;

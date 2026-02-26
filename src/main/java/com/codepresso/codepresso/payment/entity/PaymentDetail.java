@@ -2,37 +2,51 @@ package com.codepresso.codepresso.payment.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDateTime;
 
-
-
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor @Builder
-@Table(name = "payment_detail")
 @Entity
+@Table(name = "payment_detail")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PaymentDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "payment_detail_id")
     private Long id;
 
     // FK → PaymentMaster
-    @ManyToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_id", nullable = false)
     private Payment payment;
 
-    // FK → PaymentType
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "payment_type_id", nullable = false)
-    private PaymentType paymentType;
+    // 카드 결제 상세
+    @Column(name = "card_company", length = 50)
+    private String cardCompany;
 
-    @Column(name = "payment_amt")
-    private Integer paymentAmt;
+    @Column(name = "card_number", length = 20)
+    private String cardNumber;
 
-    @Column(name = "payment_date")
-    private LocalDateTime paymentDate;
+    @Column(name = "installment_months")
+    private Integer installmentMonths;
 
-    @Column(name = "PG_id", length = 50)
-    private String pgId;
+    @Column(name = "card_type", length = 20)
+    private String cardType;
+
+    @Column(name = "owner_type", length = 20)
+    private String ownerType;
+
+    @Column(name = "acquire_status", length = 20)
+    private String acquireStatus;
+
+    @Builder
+    public PaymentDetail(Payment payment, String cardCompany, String cardNumber,
+                         Integer installmentMonths, String cardType, String ownerType,
+                         String acquireStatus) {
+        this.payment = payment;
+        this.cardCompany = cardCompany;
+        this.cardNumber = cardNumber;
+        this.installmentMonths = installmentMonths;
+        this.cardType = cardType;
+        this.ownerType = ownerType;
+        this.acquireStatus = acquireStatus;
+    }
 }
