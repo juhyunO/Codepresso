@@ -223,7 +223,7 @@ public class PaymentService {
     }
 
     private CheckoutResponse buildCheckoutResponse(Orders orders) {
-        Orders fetchedOrders = ordersRepository.findByIdWithDetailsAndOptions(orders.getId())
+        Orders fetchedOrders = ordersRepository.findByIdWithDetails(orders.getId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
 
         List<CheckoutResponse.OrderItem> orderItems = new ArrayList<>();
