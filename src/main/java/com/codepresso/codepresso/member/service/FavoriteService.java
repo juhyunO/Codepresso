@@ -1,6 +1,6 @@
 package com.codepresso.codepresso.member.service;
 
-import com.codepresso.codepresso.auth.dto.AuthResponse;
+import com.codepresso.codepresso.auth.dto.response.AuthResponse;
 import com.codepresso.codepresso.member.dto.FavoriteListResponse;
 import com.codepresso.codepresso.member.dto.FavoriteRequest;
 import com.codepresso.codepresso.member.dto.FavoriteResponse;

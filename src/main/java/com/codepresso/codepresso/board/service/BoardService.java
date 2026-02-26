@@ -1,7 +1,7 @@
 package com.codepresso.codepresso.board.service;
 
 import com.codepresso.codepresso.board.dto.*;
-import com.codepresso.codepresso.auth.dto.AuthResponse;
+import com.codepresso.codepresso.auth.dto.response.AuthResponse;
 import com.codepresso.codepresso.board.entity.Board;
 import com.codepresso.codepresso.board.entity.BoardType;
 import com.codepresso.codepresso.member.entity.Member;

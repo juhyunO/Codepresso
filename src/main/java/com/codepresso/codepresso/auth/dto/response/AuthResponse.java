@@ -1,4 +1,4 @@
-package com.codepresso.codepresso.member.dto;
+package com.codepresso.codepresso.auth.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,14 +6,22 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 비밀번호 찾기 응답 DTO
+ * 인증 관련 응답 DTO
+ * API 성공/실패 응답에 사용
  */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PasswordFindResponse {
+public class AuthResponse {
+    
+    /**
+     * 성공 여부
+     */
     private boolean success;
+    
+    /**
+     * 응답 메시지
+     */
     private String message;
-    private String verificationCode; // 하드코딩된 인증번호 (개발용)
 }

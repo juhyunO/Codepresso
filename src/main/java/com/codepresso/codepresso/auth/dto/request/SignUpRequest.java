@@ -1,14 +1,16 @@
-package com.codepresso.codepresso.auth.dto;
+package com.codepresso.codepresso.auth.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /**
  * 회원가입 요청 DTO
  */
-@Data
+@Getter
+@NoArgsConstructor
 public class SignUpRequest {
     @NotBlank
     @Size(min = 4, max = 50)

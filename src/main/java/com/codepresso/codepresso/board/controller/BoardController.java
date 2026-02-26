@@ -1,7 +1,7 @@
 package com.codepresso.codepresso.board.controller;
 
 import com.codepresso.codepresso.board.dto.*;
-import com.codepresso.codepresso.auth.dto.AuthResponse;
+import com.codepresso.codepresso.auth.dto.response.AuthResponse;
 import com.codepresso.codepresso.security.LoginUser;
 import com.codepresso.codepresso.board.service.BoardService;
 import jakarta.validation.Valid;
